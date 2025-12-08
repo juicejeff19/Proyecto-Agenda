@@ -14,7 +14,9 @@ data class AgendaEvent(
     val time: String, // Formato "HH:mm"
     val description: String,
     val location: String,
-    val contact: String
+    val contact: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 class EventRepository(private val context: Context) {
@@ -44,5 +46,15 @@ class EventRepository(private val context: Context) {
         val jsonString = gson.toJson(events)
         val file = File(context.filesDir, fileName)
         file.writeText(jsonString)
+    }
+
+    fun deleteEvent(eventId: Long) {
+        val currentList = getAllEvents().toMutableList()
+        // Borra el que coincida con el ID
+        val wasRemoved = currentList.removeIf { it.id == eventId }
+
+        if (wasRemoved) {
+            saveList(currentList)
+        }
     }
 }

@@ -126,15 +126,25 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         // 5. Mapear al modelo visual (EventResult)
         val uiResults = filtered.map { event ->
             EventResult(
-                id = event.id.toInt(),
+                id = event.id, // Ahora es Long
                 date = LocalDate.parse(event.date).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
                 time = event.time,
                 category = event.category,
                 status = event.status,
-                description = event.description
+                description = event.description,
+                // Pasamos las coordenadas
+                latitude = event.latitude,
+                longitude = event.longitude
             )
         }
-
         _uiState.update { it.copy(results = uiResults) }
+    }
+
+    // NUEVA FUNCIÓN: Borrar evento
+    fun onDeleteEvent(eventId: Long) {
+        viewModelScope.launch {
+            repository.deleteEvent(eventId)
+            loadEvents() // Recargar la lista para que desaparezca visualmente
+        }
     }
 }

@@ -4,6 +4,7 @@ import android.app.DatePickerDialog
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -27,18 +31,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.proyectoagenda.model.EventCategory
 import com.example.proyectoagenda.model.EventResult
 import com.example.proyectoagenda.model.QueryType
-import androidx.compose.foundation.border
 import com.example.proyectoagenda.ui.create.ReadOnlyTextField
 import java.time.LocalDate
 import java.util.Calendar
 
-// Colores específicos de la imagen de consulta
-val OrangeTab = Color(0xFFE67E5F) // Naranja salmón
-val GreenTab = Color(0xFF4CAF50)  // Verde cita
+// Colores específicos
+val OrangeTab = Color(0xFFE67E5F)
+val GreenTab = Color(0xFF4CAF50)
 val YellowHeader = Color(0xFFFFD700)
 val GrayTabUnselected = Color(0xFFF5F5F5)
 
@@ -52,6 +57,9 @@ fun ConsultEventScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+
+    // Estado para controlar qué evento se muestra en el mapa (si es null, no muestra nada)
+    var eventToShowOnMap by remember { mutableStateOf<EventResult?>(null) }
 
     // Helpers para date pickers
     val calendar = Calendar.getInstance()
@@ -99,7 +107,7 @@ fun ConsultEventScreen(
                 Text("Consulta:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(0.dp) // Pegados como en la imagen
+                    horizontalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     QueryType.values().forEach { type ->
                         QueryTypeTab(
@@ -152,7 +160,6 @@ fun ConsultEventScreen(
                         )
                     }
                     else -> {
-                        // Placeholder para Año y Mes (puedes expandir esto luego)
                         Text("Filtro específico no implementado visualmente aún", color = Color.Gray)
                     }
                 }
@@ -188,7 +195,6 @@ fun ConsultEventScreen(
             }
 
             // 6. Tabla de Resultados (Lista fija abajo)
-            // Encabezado tabla
             Row(modifier = Modifier.fillMaxWidth().background(Color(0xFFFAFAFA)).padding(vertical = 8.dp)) {
                 Text("Fecha", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
                 Text("Hora", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), fontSize = 12.sp)
@@ -199,10 +205,50 @@ fun ConsultEventScreen(
             Divider()
 
             // Lista scrollable de resultados
-            LazyColumn(modifier = Modifier.weight(1f)) { // Toma el espacio restante
+            LazyColumn(modifier = Modifier.weight(1f)) {
                 items(uiState.results) { event ->
-                    ResultRow(event)
+                    ResultRow(
+                        event = event,
+                        onDeleteClick = { viewModel.onDeleteEvent(event.id) },
+                        onMapClick = {
+                            // Solo abrimos el mapa si hay coordenadas válidas
+                            if (event.latitude != null && event.longitude != null) {
+                                eventToShowOnMap = event
+                            }
+                        }
+                    )
                     Divider(color = Color.LightGray, thickness = 0.5.dp)
+                }
+            }
+        }
+    }
+
+    // --- DIÁLOGO DEL MAPA ---
+    // Se muestra si 'eventToShowOnMap' no es null
+    if (eventToShowOnMap != null) {
+        Dialog(
+            onDismissRequest = { eventToShowOnMap = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false) // Pantalla completa
+        ) {
+            Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
+                // Llamamos al componente que creamos en el paso anterior (EventMapViewer)
+                // Asegúrate de tener EventMapViewer.kt en el mismo paquete o importarlo
+                EventMapViewer(
+                    latitude = eventToShowOnMap!!.latitude!!,
+                    longitude = eventToShowOnMap!!.longitude!!
+                )
+
+                // Botón "X" para cerrar
+                IconButton(
+                    onClick = { eventToShowOnMap = null },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cerrar Mapa",
+                        tint = Color.Black,
+                        modifier = Modifier.background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(50))
+                    )
                 }
             }
         }
@@ -210,13 +256,74 @@ fun ConsultEventScreen(
 }
 
 @Composable
-fun ResultRow(event: EventResult) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-        Text(event.date, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
-        Text(event.time, modifier = Modifier.weight(1f), fontSize = 12.sp)
-        Text(event.category.displayName, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
-        Text(event.status.displayName, modifier = Modifier.weight(1.5f), fontSize = 12.sp, color = Color.Gray)
-        Text(event.description, modifier = Modifier.weight(2f), fontSize = 12.sp)
+fun ResultRow(
+    event: EventResult,
+    onDeleteClick: () -> Unit,
+    onMapClick: () -> Unit
+) {
+    // Estado interno para mostrar/ocultar menú
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = true } // Al hacer click en la fila, se expande el menú
+                .padding(vertical = 12.dp, horizontal = 4.dp)
+        ) {
+            Text(event.date, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
+            Text(event.time, modifier = Modifier.weight(1f), fontSize = 12.sp)
+            Text(event.category.displayName, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
+            Text(event.status.displayName, modifier = Modifier.weight(1.5f), fontSize = 12.sp, color = Color.Gray)
+            Text(event.description, modifier = Modifier.weight(2f), fontSize = 12.sp)
+        }
+
+        // Menú desplegable
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.background(Color.White)
+        ) {
+            // 1. Ver en Mapa (Solo si tiene coordenadas)
+            if (event.latitude != null && event.longitude != null) {
+                DropdownMenuItem(
+                    text = { Text("Ver Ubicación") },
+                    onClick = {
+                        expanded = false
+                        onMapClick()
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Blue)
+                    }
+                )
+            }
+
+            // 2. Actualizar (Futuro)
+            DropdownMenuItem(
+                text = { Text("Actualizar") },
+                onClick = {
+                    expanded = false
+                    // TODO: Lógica de actualización
+                },
+                leadingIcon = {
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.Gray)
+                }
+            )
+
+            Divider()
+
+            // 3. Borrar
+            DropdownMenuItem(
+                text = { Text("Borrar", color = Color.Red) },
+                onClick = {
+                    expanded = false
+                    onDeleteClick()
+                },
+                leadingIcon = {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
+                }
+            )
+        }
     }
 }
 
@@ -240,7 +347,6 @@ fun QueryTypeTab(text: String, isSelected: Boolean, onClick: () -> Unit) {
 
 @Composable
 fun CategoryTabConsult(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    // Similar al de crear pero con el color Verde cuando está seleccionado
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))

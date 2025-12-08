@@ -55,30 +55,28 @@ class CreateEventViewModel(application: Application) : AndroidViewModel(applicat
     fun onSaveClicked() {
         val state = _uiState.value
 
-        // Validación simple
         if (state.date == null || state.time == null || state.description.isBlank()) {
             Toast.makeText(getApplication(), "Faltan datos obligatorios", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Crear objeto para guardar
         val newEvent = AgendaEvent(
             category = state.selectedCategory,
             status = state.status,
-            date = state.date.toString(), // Se guarda como "2025-12-01"
-            time = state.time.toString(), // Se guarda como "14:30"
+            date = state.date.toString(),
+            time = state.time.toString(),
             description = state.description,
             location = state.location,
-            contact = state.selectedContactName
+            contact = state.selectedContactName,
+            // --- AGREGAMOS ESTO ---
+            latitude = state.latitude,
+            longitude = state.longitude
         )
 
-        // Guardar en JSON (usamos corrutina para no bloquear la UI)
         viewModelScope.launch {
             repository.saveEvent(newEvent)
-            Toast.makeText(getApplication(), "Evento Guardado en JSON", Toast.LENGTH_LONG).show()
-
-            // Opcional: Limpiar formulario después de guardar
-            _uiState.update { CreateEventUiState() }
+            Toast.makeText(getApplication(), "Evento Guardado", Toast.LENGTH_LONG).show()
+            _uiState.update { CreateEventUiState() } // Limpiar formulario
         }
     }
 
