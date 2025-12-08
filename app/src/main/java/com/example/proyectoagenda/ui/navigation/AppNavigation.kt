@@ -3,8 +3,6 @@ package com.example.proyectoagenda.ui.navigation
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,17 +11,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.proyectoagenda.ui.consult.ConsultEventScreen
 import com.example.proyectoagenda.ui.consult.ConsultEventViewModel
-import com.tuempresa.proyectoagenda.ui.create.CreateEventScreen
-// IMPORTANTE: Asegúrate de importar el ViewModel de creación
 import com.example.proyectoagenda.ui.create.CreateEventViewModel
+import com.tuempresa.proyectoagenda.ui.create.CreateEventScreen
 import kotlinx.coroutines.launch
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
 
 // ---------------------------------------------------------------------
 // Bottom Navigation Items
@@ -65,13 +62,12 @@ fun AppNavigation() {
                 )
                 Divider()
 
-                // --- Añadir Eventos (Crea Nuevo) ---
+                // --- Añadir Eventos ---
                 NavigationDrawerItem(
                     label = { Text("Añadir Eventos") },
                     selected = false,
                     icon = { Icon(Icons.Default.Add, null) },
                     onClick = {
-                        // Navega sin argumentos (crear nuevo)
                         navController.navigate("create")
                         scope.launch { drawerState.close() }
                     }
@@ -134,14 +130,17 @@ fun AppNavigation() {
         ) { padding ->
             NavHost(
                 navController = navController,
-                startDestination = "inicio",
+                startDestination = "inicio", // Ya apunta a Inicio
                 modifier = Modifier.padding(padding)
             ) {
 
                 // ------------------------------
-                // HOME SCREEN
+                // HOME SCREEN (NUEVA)
                 // ------------------------------
                 composable("inicio") {
+                    // Aquí llamamos a HomeScreen. Como eliminamos la versión antigua
+                    // al final de este archivo, ahora usará la nueva versión (Dashboard)
+                    // que creamos en el archivo separado HomeScreen.kt
                     HomeScreen(
                         onMenuClicked = { scope.launch { drawerState.open() } }
                     )
@@ -150,22 +149,18 @@ fun AppNavigation() {
                 // ------------------------------
                 // CREATE / EDIT SCREEN
                 // ------------------------------
-                // Modificado para aceptar argumento opcional eventId
                 composable(
                     route = "create?eventId={eventId}",
                     arguments = listOf(
                         navArgument("eventId") {
                             type = NavType.LongType
-                            defaultValue = -1L // Valor por defecto: Crear Nuevo
+                            defaultValue = -1L
                         }
                     )
                 ) { backStackEntry ->
-                    // Recuperamos el ID (si existe)
                     val eventId = backStackEntry.arguments?.getLong("eventId") ?: -1L
-
                     val createViewModel: CreateEventViewModel = viewModel()
 
-                    // Lógica para cargar datos si es edición o limpiar si es nuevo
                     LaunchedEffect(eventId) {
                         if (eventId != -1L) {
                             createViewModel.loadEventForEdit(eventId)
@@ -186,7 +181,6 @@ fun AppNavigation() {
                 composable("consult") {
                     val viewModel: ConsultEventViewModel = viewModel()
 
-                    // Recargar datos al entrar
                     LaunchedEffect(Unit) {
                         viewModel.loadEvents()
                     }
@@ -194,7 +188,6 @@ fun AppNavigation() {
                     ConsultEventScreen(
                         viewModel = viewModel,
                         onMenuClicked = { scope.launch { drawerState.open() } },
-                        // CONECTAMOS LA NAVEGACIÓN DE EDICIÓN
                         onEditEvent = { eventId ->
                             navController.navigate("create?eventId=$eventId")
                         }
@@ -231,8 +224,6 @@ fun AppNavigation() {
 fun BottomNavigationBar(navController: androidx.navigation.NavController) {
     NavigationBar {
         val currentRoute = navController.currentBackStackEntry?.destination?.route
-        // Truco simple: si la ruta empieza con "create", lo marcamos como seleccionado si el ítem fuera ese
-        // (Aunque en tu lista actual no tienes botón de "Crear" en la barra inferior, solo Inicio, Consultar, Salir)
 
         bottomItems.forEach { item ->
             NavigationBarItem(
@@ -249,7 +240,9 @@ fun BottomNavigationBar(navController: androidx.navigation.NavController) {
     }
 }
 
-// ... Resto de pantallas (BackupScreen, AboutScreen, etc.) iguales ...
+// ---------------------------------------------------------------------
+// PANTALLAS ADICIONALES
+// ---------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackupScreen(onMenuClicked: () -> Unit) {
@@ -302,37 +295,7 @@ fun ExitScreen() {
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun HomeScreen(onMenuClicked: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Inicio") },
-                navigationIcon = {
-                    IconButton(onClick = onMenuClicked) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menú")
-                    }
-                }
-            )
-        }
-    ) { padding ->
-        val eventos = listOf(
-            "Evento 1 - Hoy",
-            "Evento 2 - Mañana",
-            "Evento 3 - Próxima semana",
-            "Evento 4 - Próximo mes"
-        )
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp)
-        ) {
-            items(eventos) { evento ->
-                Text(evento)
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
-    }
-}
+// *** IMPORTANTE: ***
+// He eliminado la función 'HomeScreen' antigua que estaba aquí abajo.
+// Al no estar aquí, la app usará automáticamente el archivo HomeScreen.kt
+// que creamos en el paso anterior.
