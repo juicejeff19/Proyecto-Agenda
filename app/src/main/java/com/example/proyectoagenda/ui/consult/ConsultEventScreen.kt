@@ -52,13 +52,14 @@ val GrayTabUnselected = Color(0xFFF5F5F5)
 @Composable
 fun ConsultEventScreen(
     viewModel: ConsultEventViewModel = viewModel(),
-    onMenuClicked: () -> Unit = {}
+    onMenuClicked: () -> Unit = {},
+    onEditEvent: (Long) -> Unit // Callback para editar
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // Estado para controlar qué evento se muestra en el mapa (si es null, no muestra nada)
+    // Estado para controlar qué evento se muestra en el mapa
     var eventToShowOnMap by remember { mutableStateOf<EventResult?>(null) }
 
     // Helpers para date pickers
@@ -211,11 +212,12 @@ fun ConsultEventScreen(
                         event = event,
                         onDeleteClick = { viewModel.onDeleteEvent(event.id) },
                         onMapClick = {
-                            // Solo abrimos el mapa si hay coordenadas válidas
                             if (event.latitude != null && event.longitude != null) {
                                 eventToShowOnMap = event
                             }
-                        }
+                        },
+                        // CONECTAMOS LA ACCIÓN DE EDITAR
+                        onEditClick = { onEditEvent(event.id) }
                     )
                     Divider(color = Color.LightGray, thickness = 0.5.dp)
                 }
@@ -224,21 +226,17 @@ fun ConsultEventScreen(
     }
 
     // --- DIÁLOGO DEL MAPA ---
-    // Se muestra si 'eventToShowOnMap' no es null
     if (eventToShowOnMap != null) {
         Dialog(
             onDismissRequest = { eventToShowOnMap = null },
-            properties = DialogProperties(usePlatformDefaultWidth = false) // Pantalla completa
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
             Box(modifier = Modifier.fillMaxSize().background(Color.White)) {
-                // Llamamos al componente que creamos en el paso anterior (EventMapViewer)
-                // Asegúrate de tener EventMapViewer.kt en el mismo paquete o importarlo
                 EventMapViewer(
                     latitude = eventToShowOnMap!!.latitude!!,
                     longitude = eventToShowOnMap!!.longitude!!
                 )
 
-                // Botón "X" para cerrar
                 IconButton(
                     onClick = { eventToShowOnMap = null },
                     modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
@@ -259,16 +257,16 @@ fun ConsultEventScreen(
 fun ResultRow(
     event: EventResult,
     onDeleteClick: () -> Unit,
-    onMapClick: () -> Unit
+    onMapClick: () -> Unit,
+    onEditClick: () -> Unit // Parámetro recibido
 ) {
-    // Estado interno para mostrar/ocultar menú
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = true } // Al hacer click en la fila, se expande el menú
+                .clickable { expanded = true }
                 .padding(vertical = 12.dp, horizontal = 4.dp)
         ) {
             Text(event.date, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
@@ -278,13 +276,12 @@ fun ResultRow(
             Text(event.description, modifier = Modifier.weight(2f), fontSize = 12.sp)
         }
 
-        // Menú desplegable
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier.background(Color.White)
         ) {
-            // 1. Ver en Mapa (Solo si tiene coordenadas)
+            // Ver Mapa
             if (event.latitude != null && event.longitude != null) {
                 DropdownMenuItem(
                     text = { Text("Ver Ubicación") },
@@ -298,12 +295,12 @@ fun ResultRow(
                 )
             }
 
-            // 2. Actualizar (Futuro)
+            // Actualizar - AHORA CONECTADO
             DropdownMenuItem(
                 text = { Text("Actualizar") },
                 onClick = {
                     expanded = false
-                    // TODO: Lógica de actualización
+                    onEditClick() // Llamada al callback
                 },
                 leadingIcon = {
                     Icon(Icons.Default.Edit, contentDescription = null, tint = Color.Gray)
@@ -312,7 +309,7 @@ fun ResultRow(
 
             Divider()
 
-            // 3. Borrar
+            // Borrar
             DropdownMenuItem(
                 text = { Text("Borrar", color = Color.Red) },
                 onClick = {

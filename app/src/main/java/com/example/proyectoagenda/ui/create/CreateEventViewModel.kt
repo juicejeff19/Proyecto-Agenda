@@ -42,6 +42,7 @@ class CreateEventViewModel(application: Application) : AndroidViewModel(applicat
 
     // Inicializamos el repositorio pasando el contexto de la aplicación
     private val repository = EventRepository(application.applicationContext)
+    private var currentEditingId: Long? = null
 
     // ... Tus funciones de cambio de estado (onCategorySelected, etc) se quedan igual ...
     fun onCategorySelected(category: EventCategory) { _uiState.update { it.copy(selectedCategory = category) } }
@@ -54,13 +55,16 @@ class CreateEventViewModel(application: Application) : AndroidViewModel(applicat
 
     fun onSaveClicked() {
         val state = _uiState.value
-
         if (state.date == null || state.time == null || state.description.isBlank()) {
-            Toast.makeText(getApplication(), "Faltan datos obligatorios", Toast.LENGTH_SHORT).show()
+            Toast.makeText(getApplication(), "Faltan datos", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val newEvent = AgendaEvent(
+        // Si currentEditingId tiene valor, usamos ese ID. Si es null, generamos uno nuevo.
+        val eventIdToSave = currentEditingId ?: System.currentTimeMillis()
+
+        val eventToSave = AgendaEvent(
+            id = eventIdToSave, // <--- CLAVE: Usamos el mismo ID para no duplicar
             category = state.selectedCategory,
             status = state.status,
             date = state.date.toString(),
@@ -68,16 +72,30 @@ class CreateEventViewModel(application: Application) : AndroidViewModel(applicat
             description = state.description,
             location = state.location,
             contact = state.selectedContactName,
-            // --- AGREGAMOS ESTO ---
             latitude = state.latitude,
             longitude = state.longitude
         )
 
         viewModelScope.launch {
-            repository.saveEvent(newEvent)
-            Toast.makeText(getApplication(), "Evento Guardado", Toast.LENGTH_LONG).show()
-            _uiState.update { CreateEventUiState() } // Limpiar formulario
+            if (currentEditingId != null) {
+                repository.updateEvent(eventToSave)
+                Toast.makeText(getApplication(), "Evento Actualizado", Toast.LENGTH_SHORT).show()
+            } else {
+                repository.saveEvent(eventToSave)
+                Toast.makeText(getApplication(), "Evento Creado", Toast.LENGTH_SHORT).show()
+            }
+
+            // Opcional: Navegar atrás o limpiar
+            // Por ahora solo limpiamos el estado para evitar confusiones
+            _uiState.update { CreateEventUiState() }
+            currentEditingId = null
         }
+    }
+
+    // Función para limpiar el formulario (útil al entrar a "Crear Nuevo")
+    fun clearForm() {
+        _uiState.update { CreateEventUiState() }
+        currentEditingId = null
     }
 
     // NUEVA FUNCIÓN: Llamada cuando el mapa confirma la ubicación
@@ -89,6 +107,30 @@ class CreateEventViewModel(application: Application) : AndroidViewModel(applicat
                 // Guardamos en el string 'location' algo legible para el JSON actual
                 location = "Lat: ${String.format("%.4f", lat)}, Lon: ${String.format("%.4f", lon)}"
             )
+        }
+    }
+
+    fun loadEventForEdit(eventId: Long) {
+        viewModelScope.launch {
+            val event = repository.getEventById(eventId)
+            if (event != null) {
+                currentEditingId = event.id
+                // Convertimos los Strings del JSON de vuelta a objetos visuales
+                _uiState.update {
+                    it.copy(
+                        selectedCategory = event.category,
+                        status = event.status,
+                        // Parsear Fechas (Manejo simple de errores)
+                        date = try { LocalDate.parse(event.date) } catch (e: Exception) { null },
+                        time = try { LocalTime.parse(event.time) } catch (e: Exception) { null },
+                        description = event.description,
+                        location = event.location,
+                        latitude = event.latitude,
+                        longitude = event.longitude,
+                        selectedContactName = event.contact
+                    )
+                }
+            }
         }
     }
 }

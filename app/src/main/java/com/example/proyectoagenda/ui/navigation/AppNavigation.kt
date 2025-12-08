@@ -19,7 +19,11 @@ import androidx.navigation.compose.rememberNavController
 import com.example.proyectoagenda.ui.consult.ConsultEventScreen
 import com.example.proyectoagenda.ui.consult.ConsultEventViewModel
 import com.tuempresa.proyectoagenda.ui.create.CreateEventScreen
+// IMPORTANTE: Asegúrate de importar el ViewModel de creación
+import com.example.proyectoagenda.ui.create.CreateEventViewModel
 import kotlinx.coroutines.launch
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 
 // ---------------------------------------------------------------------
 // Bottom Navigation Items
@@ -61,12 +65,13 @@ fun AppNavigation() {
                 )
                 Divider()
 
-                // --- Añadir Eventos ---
+                // --- Añadir Eventos (Crea Nuevo) ---
                 NavigationDrawerItem(
                     label = { Text("Añadir Eventos") },
                     selected = false,
                     icon = { Icon(Icons.Default.Add, null) },
                     onClick = {
+                        // Navega sin argumentos (crear nuevo)
                         navController.navigate("create")
                         scope.launch { drawerState.close() }
                     }
@@ -80,11 +85,10 @@ fun AppNavigation() {
                     onClick = {
                         navController.navigate("consult")
                         scope.launch { drawerState.close() }
-
                     }
                 )
 
-                // --- NUEVO: Respaldar/Recuperar ---
+                // --- Respaldar/Recuperar ---
                 NavigationDrawerItem(
                     label = { Text("Respaldar / Recuperar") },
                     selected = false,
@@ -95,7 +99,7 @@ fun AppNavigation() {
                     }
                 )
 
-                // --- NUEVO: Acerca de... ---
+                // --- Acerca de... ---
                 NavigationDrawerItem(
                     label = { Text("Acerca de…") },
                     selected = false,
@@ -135,7 +139,7 @@ fun AppNavigation() {
             ) {
 
                 // ------------------------------
-                // HOME SCREEN (Listado simple de texto)
+                // HOME SCREEN
                 // ------------------------------
                 composable("inicio") {
                     HomeScreen(
@@ -144,28 +148,62 @@ fun AppNavigation() {
                 }
 
                 // ------------------------------
-                // DEMÁS PANTALLAS
+                // CREATE / EDIT SCREEN
                 // ------------------------------
-                composable("create") {
+                // Modificado para aceptar argumento opcional eventId
+                composable(
+                    route = "create?eventId={eventId}",
+                    arguments = listOf(
+                        navArgument("eventId") {
+                            type = NavType.LongType
+                            defaultValue = -1L // Valor por defecto: Crear Nuevo
+                        }
+                    )
+                ) { backStackEntry ->
+                    // Recuperamos el ID (si existe)
+                    val eventId = backStackEntry.arguments?.getLong("eventId") ?: -1L
+
+                    val createViewModel: CreateEventViewModel = viewModel()
+
+                    // Lógica para cargar datos si es edición o limpiar si es nuevo
+                    LaunchedEffect(eventId) {
+                        if (eventId != -1L) {
+                            createViewModel.loadEventForEdit(eventId)
+                        } else {
+                            createViewModel.clearForm()
+                        }
+                    }
+
                     CreateEventScreen(
+                        viewModel = createViewModel,
                         onMenuClicked = { scope.launch { drawerState.open() } }
                     )
                 }
 
+                // ------------------------------
+                // CONSULT SCREEN
+                // ------------------------------
                 composable("consult") {
-                    val viewModel: ConsultEventViewModel = viewModel() // Compose creará o recuperará el VM
+                    val viewModel: ConsultEventViewModel = viewModel()
 
-                    // ESTO ES NUEVO: Recarga los datos cada vez que entras a esta pantalla
+                    // Recargar datos al entrar
                     LaunchedEffect(Unit) {
                         viewModel.loadEvents()
                     }
 
                     ConsultEventScreen(
                         viewModel = viewModel,
-                        onMenuClicked = { scope.launch { drawerState.open() } }
+                        onMenuClicked = { scope.launch { drawerState.open() } },
+                        // CONECTAMOS LA NAVEGACIÓN DE EDICIÓN
+                        onEditEvent = { eventId ->
+                            navController.navigate("create?eventId=$eventId")
+                        }
                     )
                 }
 
+                // ------------------------------
+                // OTRAS PANTALLAS
+                // ------------------------------
                 composable("backup") {
                     BackupScreen(
                         onMenuClicked = { scope.launch { drawerState.open() } }
@@ -191,13 +229,12 @@ fun AppNavigation() {
 // ---------------------------------------------------------------------
 @Composable
 fun BottomNavigationBar(navController: androidx.navigation.NavController) {
-
     NavigationBar {
-
         val currentRoute = navController.currentBackStackEntry?.destination?.route
+        // Truco simple: si la ruta empieza con "create", lo marcamos como seleccionado si el ítem fuera ese
+        // (Aunque en tu lista actual no tienes botón de "Crear" en la barra inferior, solo Inicio, Consultar, Salir)
 
         bottomItems.forEach { item ->
-
             NavigationBarItem(
                 selected = currentRoute == item.route,
                 onClick = {
@@ -212,9 +249,7 @@ fun BottomNavigationBar(navController: androidx.navigation.NavController) {
     }
 }
 
-// ---------------------------------------------------------------------
-// PANTALLAS ADICIONALES
-// ---------------------------------------------------------------------
+// ... Resto de pantallas (BackupScreen, AboutScreen, etc.) iguales ...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BackupScreen(onMenuClicked: () -> Unit) {
@@ -267,13 +302,9 @@ fun ExitScreen() {
     )
 }
 
-// ---------------------------------------------------------------------
-// PANTALLA HOME (Listado simple de texto)
-// ---------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(onMenuClicked: () -> Unit) {
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -286,14 +317,12 @@ fun HomeScreen(onMenuClicked: () -> Unit) {
             )
         }
     ) { padding ->
-
         val eventos = listOf(
             "Evento 1 - Hoy",
             "Evento 2 - Mañana",
             "Evento 3 - Próxima semana",
             "Evento 4 - Próximo mes"
         )
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

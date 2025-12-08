@@ -57,4 +57,21 @@ class EventRepository(private val context: Context) {
             saveList(currentList)
         }
     }
+
+    // 1. Obtener un solo evento por ID
+    fun getEventById(id: Long): AgendaEvent? {
+        return getAllEvents().find { it.id == id }
+    }
+
+    // 2. Actualizar un evento existente
+    fun updateEvent(updatedEvent: AgendaEvent) {
+        val list = getAllEvents().toMutableList()
+        // Buscamos el índice del evento que tenga el mismo ID
+        val index = list.indexOfFirst { it.id == updatedEvent.id }
+
+        if (index != -1) {
+            list[index] = updatedEvent // Reemplazamos
+            saveList(list) // Guardamos
+        }
+    }
 }
