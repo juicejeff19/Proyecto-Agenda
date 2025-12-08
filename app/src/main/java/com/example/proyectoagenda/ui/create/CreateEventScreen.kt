@@ -1,14 +1,13 @@
 package com.tuempresa.proyectoagenda.ui.create
 
-// --- BLOQUE DE IMPORTS CORREGIDO ---
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll // <--- IMPORTANTE PARA SCROLL HORIZONTAL
-import androidx.compose.foundation.layout.* // <--- IMPORTANTE: Este asterisco importa padding, width, height, fillMaxWidth
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -18,7 +17,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier // <--- IMPORTANTE: Sin esto, los modifiers no funcionan
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -27,20 +26,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.proyectoagenda.model.EventCategory
 import com.example.proyectoagenda.model.EventStatus
 import com.example.proyectoagenda.ui.create.CreateEventViewModel
+import com.example.proyectoagenda.ui.create.LocationPickerMap // Asegúrate de que este import coincida con donde creaste el archivo del mapa
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.Calendar
-// -----------------------------------
 
-// Colores personalizados basados en la imagen
-val YellowPrimary = Color(0xFFFFD700) // Amarillo barra superior
-val BlueHighlight = Color(0xFF2196F3) // Azul pestaña seleccionada
-val GrayBackground = Color(0xFFF5F5F5) // Fondo general
-val GrayUnselected = Color(0xFFE0E0E0) // Pestaña no seleccionada
+// Colores personalizados
+val YellowPrimary = Color(0xFFFFD700)
+val BlueHighlight = Color(0xFF2196F3)
+val GrayBackground = Color(0xFFF5F5F5)
+val GrayUnselected = Color(0xFFE0E0E0)
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +53,9 @@ fun CreateEventScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
+
+    // --- NUEVO: Estado para controlar la visibilidad del mapa ---
+    var showMap by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -75,10 +79,10 @@ fun CreateEventScreen(
         },
         containerColor = GrayBackground
     ) { paddingValues ->
-        // Aquí usamos el padding que nos da el Scaffold + verticalScroll
+
         Column(
             modifier = Modifier
-                .padding(paddingValues) // <--- Aquí se usa el import foundation.layout.*
+                .padding(paddingValues)
                 .padding(16.dp)
                 .verticalScroll(scrollState)
         ) {
@@ -142,11 +146,13 @@ fun CreateEventScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 5. Ubicación
-            CustomLabelTextField(
+            // 5. Ubicación (MODIFICADO PARA USAR MAPA)
+            // Ya no usamos CustomLabelTextField, usamos ReadOnlyTextField para abrir el mapa
+            ReadOnlyTextField(
                 label = "Ubicación",
-                value = uiState.location,
-                onValueChange = viewModel::onLocationChanged
+                // Mostramos un texto de ayuda si está vacío, o el valor seleccionado
+                value = uiState.location.ifEmpty { "Toque para seleccionar en mapa" },
+                onClick = { showMap = true } // Al hacer click, mostramos el diálogo
             )
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -176,7 +182,25 @@ fun CreateEventScreen(
             }
         }
     }
+
+    // --- NUEVO: Lógica del Diálogo del Mapa ---
+    if (showMap) {
+        Dialog(
+            onDismissRequest = { showMap = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false) // Ocupa toda la pantalla
+        ) {
+            // Llamamos a nuestro componente de mapa
+            LocationPickerMap(
+                onLocationConfirmed = { lat, lon ->
+                    viewModel.onLocationSelected(lat, lon) // Pasamos las coordenadas al ViewModel
+                    showMap = false // Cerramos el mapa
+                }
+            )
+        }
+    }
 }
+
+// --- COMPONENTES AUXILIARES (Sin cambios, pero necesarios para que compile) ---
 
 @Composable
 fun CategorySelectionRow(
@@ -189,7 +213,6 @@ fun CategorySelectionRow(
     ) {
         Text("Categoria:", fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
         Row(
-            // Aquí usamos horizontalScroll que requiere el import foundation.horizontalScroll
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {

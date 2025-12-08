@@ -26,7 +26,9 @@ data class CreateEventUiState(
     val status: EventStatus = EventStatus.PENDIENTE,
     val location: String = "",
     val selectedContactName: String = "Alejandro",
-    val availableContacts: List<String> = listOf("Alejandro", "Maria", "Carlos", "Sofia")
+    val availableContacts: List<String> = listOf("Alejandro", "Maria", "Carlos", "Sofia"),
+    val latitude: Double? = null, // NUEVO
+    val longitude: Double? = null // NUEVO
 ) {
     fun getFormattedDate(): String = date?.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) ?: "dd/mm/aaaa"
     fun getFormattedTime(): String = time?.format(DateTimeFormatter.ofPattern("HH:mm")) ?: "--:-- -----"
@@ -77,6 +79,18 @@ class CreateEventViewModel(application: Application) : AndroidViewModel(applicat
 
             // Opcional: Limpiar formulario después de guardar
             _uiState.update { CreateEventUiState() }
+        }
+    }
+
+    // NUEVA FUNCIÓN: Llamada cuando el mapa confirma la ubicación
+    fun onLocationSelected(lat: Double, lon: Double) {
+        _uiState.update {
+            it.copy(
+                latitude = lat,
+                longitude = lon,
+                // Guardamos en el string 'location' algo legible para el JSON actual
+                location = "Lat: ${String.format("%.4f", lat)}, Lon: ${String.format("%.4f", lon)}"
+            )
         }
     }
 }
