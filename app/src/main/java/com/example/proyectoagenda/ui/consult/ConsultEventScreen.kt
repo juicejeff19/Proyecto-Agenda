@@ -14,7 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
@@ -24,6 +27,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -37,7 +41,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.proyectoagenda.model.EventCategory
 import com.example.proyectoagenda.model.EventResult
 import com.example.proyectoagenda.model.QueryType
-import com.example.proyectoagenda.ui.create.ReadOnlyTextField
 import java.time.LocalDate
 import java.util.Calendar
 
@@ -53,16 +56,14 @@ val GrayTabUnselected = Color(0xFFF5F5F5)
 fun ConsultEventScreen(
     viewModel: ConsultEventViewModel = viewModel(),
     onMenuClicked: () -> Unit = {},
-    onEditEvent: (Long) -> Unit // Callback para editar
+    onEditEvent: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val scrollState = rememberScrollState()
 
-    // Estado para controlar qué evento se muestra en el mapa
     var eventToShowOnMap by remember { mutableStateOf<EventResult?>(null) }
 
-    // Helpers para date pickers
     val calendar = Calendar.getInstance()
     fun showDatePicker(onDateSelected: (LocalDate) -> Unit) {
         DatePickerDialog(
@@ -101,10 +102,10 @@ fun ConsultEventScreen(
                 .padding(16.dp)
                 .fillMaxSize()
         ) {
-            // Sección superior scrolleable (Filtros)
+            // Filtros (Scrollable)
             Column(modifier = Modifier.verticalScroll(scrollState).weight(1f, fill = false)) {
 
-                // 1. Pestañas de Tipo de Consulta
+                // 1. Tipo de Consulta
                 Text("Consulta:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
                 Row(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -120,7 +121,7 @@ fun ConsultEventScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 2. Pestañas de Categoría
+                // 2. Categoría
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Categoria:", fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
                     Row(
@@ -138,30 +139,66 @@ fun ConsultEventScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 3. Campos dinámicos según tipo de consulta
+                // 3. CAMPOS DINÁMICOS (CORREGIDO)
                 when (uiState.selectedQueryType) {
                     QueryType.RANGO -> {
-                        ReadOnlyTextField(
+                        // Usamos el nuevo componente DateSelectorField
+                        DateSelectorField(
                             label = "Fecha Inicial",
                             value = uiState.getFormattedStartDate(),
                             onClick = { showDatePicker(viewModel::onStartDateChanged) }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        ReadOnlyTextField(
+                        DateSelectorField(
                             label = "Fecha Final",
                             value = uiState.getFormattedEndDate(),
                             onClick = { showDatePicker(viewModel::onEndDateChanged) }
                         )
                     }
                     QueryType.DIA -> {
-                        ReadOnlyTextField(
+                        DateSelectorField(
                             label = "Día",
                             value = uiState.getFormattedSpecificDate(),
                             onClick = { showDatePicker(viewModel::onSpecificDateChanged) }
                         )
                     }
-                    else -> {
-                        Text("Filtro específico no implementado visualmente aún", color = Color.Gray)
+                    QueryType.MES -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            IconButton(onClick = { viewModel.onMonthChange(-1) }) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Anterior")
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(uiState.getMonthName(), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text("${uiState.selectedYear}", color = Color.Gray, fontSize = 14.sp)
+                            }
+                            IconButton(onClick = { viewModel.onMonthChange(1) }) {
+                                Icon(Icons.Default.ArrowForward, contentDescription = "Siguiente")
+                            }
+                        }
+                    }
+                    QueryType.ANIO -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            IconButton(onClick = { viewModel.onYearChange(-1) }) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Anterior")
+                            }
+                            Text(
+                                text = "${uiState.selectedYear}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 24.sp,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            )
+                            IconButton(onClick = { viewModel.onYearChange(1) }) {
+                                Icon(Icons.Default.ArrowForward, contentDescription = "Siguiente")
+                            }
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(20.dp))
@@ -178,13 +215,13 @@ fun ConsultEventScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 5. Barra de Búsqueda
+                // 5. Búsqueda
                 OutlinedTextField(
                     value = uiState.searchText,
                     onValueChange = viewModel::onSearchTextChanged,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
+                    placeholder = { Text("Buscar...") },
+                    leadingIcon = { Icon(Icons.Default.Search, null, tint = Color.Gray) },
                     shape = RoundedCornerShape(24.dp),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
@@ -195,17 +232,16 @@ fun ConsultEventScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // 6. Tabla de Resultados (Lista fija abajo)
+            // 6. Tabla (Resultados)
             Row(modifier = Modifier.fillMaxWidth().background(Color(0xFFFAFAFA)).padding(vertical = 8.dp)) {
                 Text("Fecha", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
                 Text("Hora", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                Text("Categoria", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
+                Text("Cat.", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
                 Text("Status", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f), fontSize = 12.sp)
-                Text("Descripción", fontWeight = FontWeight.Bold, modifier = Modifier.weight(2f), fontSize = 12.sp)
+                Text("Desc.", fontWeight = FontWeight.Bold, modifier = Modifier.weight(2f), fontSize = 12.sp)
             }
             Divider()
 
-            // Lista scrollable de resultados
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(uiState.results) { event ->
                     ResultRow(
@@ -216,7 +252,6 @@ fun ConsultEventScreen(
                                 eventToShowOnMap = event
                             }
                         },
-                        // CONECTAMOS LA ACCIÓN DE EDITAR
                         onEditClick = { onEditEvent(event.id) }
                     )
                     Divider(color = Color.LightGray, thickness = 0.5.dp)
@@ -225,7 +260,6 @@ fun ConsultEventScreen(
         }
     }
 
-    // --- DIÁLOGO DEL MAPA ---
     if (eventToShowOnMap != null) {
         Dialog(
             onDismissRequest = { eventToShowOnMap = null },
@@ -236,14 +270,13 @@ fun ConsultEventScreen(
                     latitude = eventToShowOnMap!!.latitude!!,
                     longitude = eventToShowOnMap!!.longitude!!
                 )
-
                 IconButton(
                     onClick = { eventToShowOnMap = null },
                     modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Close,
-                        contentDescription = "Cerrar Mapa",
+                        contentDescription = "Cerrar",
                         tint = Color.Black,
                         modifier = Modifier.background(Color.White.copy(alpha = 0.7f), RoundedCornerShape(50))
                     )
@@ -253,12 +286,42 @@ fun ConsultEventScreen(
     }
 }
 
+// --- NUEVO COMPONENTE ROBUSTO PARA FECHAS ---
+@Composable
+fun DateSelectorField(
+    label: String,
+    value: String,
+    onClick: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = {},
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(label) },
+            readOnly = true, // Solo lectura visual
+            trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, tint = Color.Gray) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White
+            )
+        )
+        // Esta caja invisible captura el clic al 100%
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .alpha(0f)
+                .clickable(onClick = onClick)
+        )
+    }
+}
+
 @Composable
 fun ResultRow(
     event: EventResult,
     onDeleteClick: () -> Unit,
     onMapClick: () -> Unit,
-    onEditClick: () -> Unit // Parámetro recibido
+    onEditClick: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -281,44 +344,23 @@ fun ResultRow(
             onDismissRequest = { expanded = false },
             modifier = Modifier.background(Color.White)
         ) {
-            // Ver Mapa
             if (event.latitude != null && event.longitude != null) {
                 DropdownMenuItem(
                     text = { Text("Ver Ubicación") },
-                    onClick = {
-                        expanded = false
-                        onMapClick()
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Blue)
-                    }
+                    onClick = { expanded = false; onMapClick() },
+                    leadingIcon = { Icon(Icons.Default.LocationOn, null, tint = Color.Blue) }
                 )
             }
-
-            // Actualizar - AHORA CONECTADO
             DropdownMenuItem(
                 text = { Text("Actualizar") },
-                onClick = {
-                    expanded = false
-                    onEditClick() // Llamada al callback
-                },
-                leadingIcon = {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = Color.Gray)
-                }
+                onClick = { expanded = false; onEditClick() },
+                leadingIcon = { Icon(Icons.Default.Edit, null, tint = Color.Gray) }
             )
-
             Divider()
-
-            // Borrar
             DropdownMenuItem(
                 text = { Text("Borrar", color = Color.Red) },
-                onClick = {
-                    expanded = false
-                    onDeleteClick()
-                },
-                leadingIcon = {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
-                }
+                onClick = { expanded = false; onDeleteClick() },
+                leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red) }
             )
         }
     }
@@ -333,12 +375,7 @@ fun QueryTypeTab(text: String, isSelected: Boolean, onClick: () -> Unit) {
             .clickable { onClick() }
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        Text(
-            text = text,
-            color = if (isSelected) Color.White else Color.Black,
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp
-        )
+        Text(text, color = if (isSelected) Color.White else Color.Black, fontWeight = FontWeight.Bold, fontSize = 14.sp)
     }
 }
 
@@ -352,11 +389,6 @@ fun CategoryTabConsult(text: String, isSelected: Boolean, onClick: () -> Unit) {
             .clickable { onClick() }
             .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
-        Text(
-            text = text,
-            color = if (isSelected) Color.White else Color.Black,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 12.sp
-        )
+        Text(text, color = if (isSelected) Color.White else Color.Black, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp)
     }
 }

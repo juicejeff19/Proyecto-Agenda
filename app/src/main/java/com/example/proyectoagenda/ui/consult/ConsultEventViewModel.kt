@@ -16,20 +16,32 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-// ... Tu ConsultUiState se queda igual ...
 data class ConsultUiState(
     val selectedQueryType: QueryType = QueryType.RANGO,
     val selectedCategory: EventCategory = EventCategory.CITA,
+
+    // Filtros de Rango y Día
     val startDate: LocalDate = LocalDate.now(),
     val endDate: LocalDate = LocalDate.now().plusDays(7),
     val specificDate: LocalDate = LocalDate.now(),
-    val year: String = "2025",
+
+    // NUEVOS: Filtros para Mes y Año
+    val selectedYear: Int = LocalDate.now().year,
+    val selectedMonth: Int = LocalDate.now().monthValue, // 1 = Enero, 12 = Diciembre
+
     val searchText: String = "",
-    val results: List<EventResult> = emptyList() // Empieza vacía
+    val results: List<EventResult> = emptyList()
 ) {
     fun getFormattedStartDate(): String = startDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
     fun getFormattedEndDate(): String = endDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
     fun getFormattedSpecificDate(): String = specificDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
+
+    // Helper para mostrar el nombre del mes
+    fun getMonthName(): String {
+        return java.time.Month.of(selectedMonth)
+            .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
+            .replaceFirstChar { it.uppercase() }
+    }
 }
 
 class ConsultEventViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,21 +52,18 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
     private val repository = EventRepository(application.applicationContext)
     private var allEventsCache: List<AgendaEvent> = emptyList()
 
-    // Cargar datos al iniciar
     init {
         loadEvents()
     }
 
-    // Función pública para recargar datos (útil cuando regresas de crear un evento)
     fun loadEvents() {
         viewModelScope.launch {
             allEventsCache = repository.getAllEvents()
-            applyFilters() // Aplicar filtros inmediatos
+            applyFilters()
         }
     }
 
-    // ... Setters de estado (onQueryTypeSelected, etc) ...
-    // IMPORTANTE: Cada vez que cambiamos un filtro, llamamos a applyFilters()
+    // --- FUNCIONES DE CAMBIO DE ESTADO ---
 
     fun onQueryTypeSelected(type: QueryType) {
         _uiState.update { it.copy(selectedQueryType = type) }
@@ -79,72 +88,102 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         applyFilters()
     }
 
+    // NUEVO: Cambiar Año (Flechas)
+    fun onYearChange(increment: Int) {
+        _uiState.update { it.copy(selectedYear = it.selectedYear + increment) }
+        applyFilters()
+    }
+
+    // NUEVO: Cambiar Mes (Flechas)
+    fun onMonthChange(increment: Int) {
+        _uiState.update {
+            var newMonth = it.selectedMonth + increment
+            var newYear = it.selectedYear
+
+            // Lógica para cambiar de año si pasamos de Diciembre a Enero o viceversa
+            if (newMonth > 12) {
+                newMonth = 1
+                newYear += 1
+            } else if (newMonth < 1) {
+                newMonth = 12
+                newYear -= 1
+            }
+            it.copy(selectedMonth = newMonth, selectedYear = newYear)
+        }
+        applyFilters()
+    }
+
     fun onSearchTextChanged(text: String) {
         _uiState.update { it.copy(searchText = text) }
         applyFilters()
     }
 
-    // Botón consultar (re-aplica filtros explícitamente)
     fun onConsultClicked() {
         applyFilters()
     }
 
-    // LÓGICA DE FILTRADO
+    fun onDeleteEvent(eventId: Long) {
+        viewModelScope.launch {
+            repository.deleteEvent(eventId)
+            loadEvents()
+        }
+    }
+
+    // --- LÓGICA DE FILTRADO COMPLETA ---
     private fun applyFilters() {
         val state = _uiState.value
 
         val filtered = allEventsCache.filter { event ->
-            // 1. Convertir fecha del evento (String) a LocalDate para comparar
-            val eventDate = LocalDate.parse(event.date)
+            try {
+                // Parseamos la fecha del evento
+                val eventDate = LocalDate.parse(event.date)
 
-            // 2. Filtro por Tipo de Fecha
-            val dateMatch = when (state.selectedQueryType) {
-                QueryType.RANGO -> {
-                    // eventDate >= startDate && eventDate <= endDate
-                    !eventDate.isBefore(state.startDate) && !eventDate.isAfter(state.endDate)
+                // 1. Filtro por Tipo de Fecha
+                val dateMatch = when (state.selectedQueryType) {
+                    QueryType.RANGO -> {
+                        !eventDate.isBefore(state.startDate) && !eventDate.isAfter(state.endDate)
+                    }
+                    QueryType.DIA -> {
+                        eventDate.isEqual(state.specificDate)
+                    }
+                    QueryType.ANIO -> {
+                        // Coincide solo el año
+                        eventDate.year == state.selectedYear
+                    }
+                    QueryType.MES -> {
+                        // Coincide mes Y año
+                        eventDate.year == state.selectedYear && eventDate.monthValue == state.selectedMonth
+                    }
                 }
-                QueryType.DIA -> {
-                    eventDate.isEqual(state.specificDate)
+
+                // 2. Filtro por Categoría
+                val categoryMatch = event.category == state.selectedCategory
+
+                // 3. Filtro por Búsqueda
+                val searchMatch = if (state.searchText.isBlank()) true else {
+                    event.description.contains(state.searchText, ignoreCase = true)
                 }
-                QueryType.ANIO -> {
-                    eventDate.year.toString() == state.year
-                }
-                else -> true // Mes u otros no implementados pasan todo
+
+                dateMatch && categoryMatch && searchMatch
+            } catch (e: Exception) {
+                false // Si hay una fecha corrupta en el JSON, la ignoramos
             }
-
-            // 3. Filtro por Categoría
-            val categoryMatch = event.category == state.selectedCategory
-
-            // 4. Filtro por Búsqueda de Texto (en descripción)
-            val searchMatch = if (state.searchText.isBlank()) true else {
-                event.description.contains(state.searchText, ignoreCase = true)
-            }
-
-            dateMatch && categoryMatch && searchMatch
         }
 
-        // 5. Mapear al modelo visual (EventResult)
+        // Mapeo a UI
         val uiResults = filtered.map { event ->
             EventResult(
-                id = event.id, // Ahora es Long
-                date = LocalDate.parse(event.date).format(DateTimeFormatter.ofPattern("yyyy-MM-dd")),
+                id = event.id,
+                date = event.date,
                 time = event.time,
                 category = event.category,
                 status = event.status,
                 description = event.description,
-                // Pasamos las coordenadas
                 latitude = event.latitude,
                 longitude = event.longitude
             )
         }
-        _uiState.update { it.copy(results = uiResults) }
-    }
 
-    // NUEVA FUNCIÓN: Borrar evento
-    fun onDeleteEvent(eventId: Long) {
-        viewModelScope.launch {
-            repository.deleteEvent(eventId)
-            loadEvents() // Recargar la lista para que desaparezca visualmente
-        }
+        _uiState.update { it.copy(results = uiResults) }
     }
 }
