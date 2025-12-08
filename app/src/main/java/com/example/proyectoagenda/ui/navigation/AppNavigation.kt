@@ -12,10 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.proyectoagenda.ui.consult.ConsultEventScreen
+import com.example.proyectoagenda.ui.consult.ConsultEventViewModel
 import com.tuempresa.proyectoagenda.ui.create.CreateEventScreen
 import kotlinx.coroutines.launch
 
@@ -78,6 +80,7 @@ fun AppNavigation() {
                     onClick = {
                         navController.navigate("consult")
                         scope.launch { drawerState.close() }
+
                     }
                 )
 
@@ -150,7 +153,15 @@ fun AppNavigation() {
                 }
 
                 composable("consult") {
+                    val viewModel: ConsultEventViewModel = viewModel() // Compose creará o recuperará el VM
+
+                    // ESTO ES NUEVO: Recarga los datos cada vez que entras a esta pantalla
+                    LaunchedEffect(Unit) {
+                        viewModel.loadEvents()
+                    }
+
                     ConsultEventScreen(
+                        viewModel = viewModel,
                         onMenuClicked = { scope.launch { drawerState.open() } }
                     )
                 }
