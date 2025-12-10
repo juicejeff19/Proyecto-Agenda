@@ -1,8 +1,12 @@
 package com.tuempresa.proyectoagenda.ui.create
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
+import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,16 +27,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.proyectoagenda.model.EventCategory
 import com.example.proyectoagenda.model.EventStatus
 import com.example.proyectoagenda.ui.create.CreateEventViewModel
-import com.example.proyectoagenda.ui.create.LocationPickerMap // Asegúrate de que este import coincida con donde creaste el archivo del mapa
+import com.example.proyectoagenda.ui.create.LocationPickerMap
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.Calendar
@@ -53,9 +57,30 @@ fun CreateEventScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val context = LocalContext.current
-
-    // --- NUEVO: Estado para controlar la visibilidad del mapa ---
     var showMap by remember { mutableStateOf(false) }
+
+    // --- LÓGICA DE PERMISOS PARA CONTACTOS ---
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            viewModel.fetchDeviceContacts()
+        }
+    }
+
+    // Al iniciar la pantalla, verificamos si tenemos permiso
+    LaunchedEffect(Unit) {
+        when (PackageManager.PERMISSION_GRANTED) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) -> {
+                // Ya tenemos permiso, cargamos contactos
+                viewModel.fetchDeviceContacts()
+            }
+            else -> {
+                // No tenemos permiso, lo pedimos
+                launcher.launch(Manifest.permission.READ_CONTACTS)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -86,14 +111,14 @@ fun CreateEventScreen(
                 .padding(16.dp)
                 .verticalScroll(scrollState)
         ) {
-            // 1. Sección de Categorías
+            // 1. Categoría
             CategorySelectionRow(
                 selectedCategory = uiState.selectedCategory,
                 onCategorySelected = viewModel::onCategorySelected
             )
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 2. Selectores de Fecha y Hora
+            // 2. Fecha y Hora
             val calendar = Calendar.getInstance()
             val datePickerDialog = DatePickerDialog(
                 context,
@@ -146,17 +171,15 @@ fun CreateEventScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 5. Ubicación (MODIFICADO PARA USAR MAPA)
-            // Ya no usamos CustomLabelTextField, usamos ReadOnlyTextField para abrir el mapa
+            // 5. Ubicación
             ReadOnlyTextField(
                 label = "Ubicación",
-                // Mostramos un texto de ayuda si está vacío, o el valor seleccionado
                 value = uiState.location.ifEmpty { "Toque para seleccionar en mapa" },
-                onClick = { showMap = true } // Al hacer click, mostramos el diálogo
+                onClick = { showMap = true }
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 6. Contacto
+            // 6. Contacto (AHORA DINÁMICO)
             ContactDropdown(
                 selectedContact = uiState.selectedContactName,
                 availableContacts = uiState.availableContacts,
@@ -183,24 +206,22 @@ fun CreateEventScreen(
         }
     }
 
-    // --- NUEVO: Lógica del Diálogo del Mapa ---
     if (showMap) {
         Dialog(
             onDismissRequest = { showMap = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false) // Ocupa toda la pantalla
+            properties = DialogProperties(usePlatformDefaultWidth = false)
         ) {
-            // Llamamos a nuestro componente de mapa
             LocationPickerMap(
                 onLocationConfirmed = { lat, lon ->
-                    viewModel.onLocationSelected(lat, lon) // Pasamos las coordenadas al ViewModel
-                    showMap = false // Cerramos el mapa
+                    viewModel.onLocationSelected(lat, lon)
+                    showMap = false
                 }
             )
         }
     }
 }
 
-// --- COMPONENTES AUXILIARES (Sin cambios, pero necesarios para que compile) ---
+// ... Componentes Auxiliares (CategorySelectionRow, GenericDropdown, etc) IGUALES ...
 
 @Composable
 fun CategorySelectionRow(
@@ -335,15 +356,23 @@ fun GenericDropdown(
                 onDismissRequest = { expanded = false },
                 modifier = Modifier.background(Color.White)
             ) {
-                options.forEach { option ->
+                // Validación para lista vacía
+                if (options.isEmpty()) {
                     DropdownMenuItem(
-                        text = { Text(option) },
-                        onClick = {
-                            onOptionSelected(option)
-                            expanded = false
-                        },
-                        contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                        text = { Text("No hay contactos") },
+                        onClick = { expanded = false }
                     )
+                } else {
+                    options.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                onOptionSelected(option)
+                                expanded = false
+                            },
+                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                        )
+                    }
                 }
             }
         }
@@ -371,11 +400,4 @@ fun ContactDropdown(selectedContact: String, availableContacts: List<String>, on
         options = availableContacts,
         onOptionSelected = onContactSelected
     )
-}
-
-@RequiresApi(Build.VERSION_CODES.O)
-@Preview(showBackground = true)
-@Composable
-fun CreateEventScreenPreview() {
-    CreateEventScreen()
 }
