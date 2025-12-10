@@ -18,16 +18,18 @@ import java.time.format.DateTimeFormatter
 
 data class ConsultUiState(
     val selectedQueryType: QueryType = QueryType.RANGO,
-    val selectedCategory: EventCategory = EventCategory.CITA,
+
+    // CAMBIO 1: Ahora es nullable (EventCategory?) y por defecto null (significa TODOS)
+    val selectedCategory: EventCategory? = null,
 
     // Filtros de Rango y Día
     val startDate: LocalDate = LocalDate.now(),
     val endDate: LocalDate = LocalDate.now().plusDays(7),
     val specificDate: LocalDate = LocalDate.now(),
 
-    // NUEVOS: Filtros para Mes y Año
+    // Filtros para Mes y Año
     val selectedYear: Int = LocalDate.now().year,
-    val selectedMonth: Int = LocalDate.now().monthValue, // 1 = Enero, 12 = Diciembre
+    val selectedMonth: Int = LocalDate.now().monthValue,
 
     val searchText: String = "",
     val results: List<EventResult> = emptyList()
@@ -36,7 +38,6 @@ data class ConsultUiState(
     fun getFormattedEndDate(): String = endDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
     fun getFormattedSpecificDate(): String = specificDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))
 
-    // Helper para mostrar el nombre del mes
     fun getMonthName(): String {
         return java.time.Month.of(selectedMonth)
             .getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale("es", "ES"))
@@ -70,7 +71,8 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         applyFilters()
     }
 
-    fun onCategorySelected(category: EventCategory) {
+    // CAMBIO 2: Aceptamos nulos
+    fun onCategorySelected(category: EventCategory?) {
         _uiState.update { it.copy(selectedCategory = category) }
         applyFilters()
     }
@@ -88,19 +90,15 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         applyFilters()
     }
 
-    // NUEVO: Cambiar Año (Flechas)
     fun onYearChange(increment: Int) {
         _uiState.update { it.copy(selectedYear = it.selectedYear + increment) }
         applyFilters()
     }
 
-    // NUEVO: Cambiar Mes (Flechas)
     fun onMonthChange(increment: Int) {
         _uiState.update {
             var newMonth = it.selectedMonth + increment
             var newYear = it.selectedYear
-
-            // Lógica para cambiar de año si pasamos de Diciembre a Enero o viceversa
             if (newMonth > 12) {
                 newMonth = 1
                 newYear += 1
@@ -129,35 +127,28 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // --- LÓGICA DE FILTRADO COMPLETA ---
+    // --- LÓGICA DE FILTRADO ---
     private fun applyFilters() {
         val state = _uiState.value
 
         val filtered = allEventsCache.filter { event ->
             try {
-                // Parseamos la fecha del evento
                 val eventDate = LocalDate.parse(event.date)
 
-                // 1. Filtro por Tipo de Fecha
+                // 1. Filtro por Fecha
                 val dateMatch = when (state.selectedQueryType) {
-                    QueryType.RANGO -> {
-                        !eventDate.isBefore(state.startDate) && !eventDate.isAfter(state.endDate)
-                    }
-                    QueryType.DIA -> {
-                        eventDate.isEqual(state.specificDate)
-                    }
-                    QueryType.ANIO -> {
-                        // Coincide solo el año
-                        eventDate.year == state.selectedYear
-                    }
-                    QueryType.MES -> {
-                        // Coincide mes Y año
-                        eventDate.year == state.selectedYear && eventDate.monthValue == state.selectedMonth
-                    }
+                    QueryType.RANGO -> !eventDate.isBefore(state.startDate) && !eventDate.isAfter(state.endDate)
+                    QueryType.DIA -> eventDate.isEqual(state.specificDate)
+                    QueryType.ANIO -> eventDate.year == state.selectedYear
+                    QueryType.MES -> eventDate.year == state.selectedYear && eventDate.monthValue == state.selectedMonth
                 }
 
-                // 2. Filtro por Categoría
-                val categoryMatch = event.category == state.selectedCategory
+                // CAMBIO 3: Filtro por Categoría (Si es null, pasa todo; si no, debe coincidir)
+                val categoryMatch = if (state.selectedCategory == null) {
+                    true
+                } else {
+                    event.category == state.selectedCategory
+                }
 
                 // 3. Filtro por Búsqueda
                 val searchMatch = if (state.searchText.isBlank()) true else {
@@ -166,11 +157,10 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
 
                 dateMatch && categoryMatch && searchMatch
             } catch (e: Exception) {
-                false // Si hay una fecha corrupta en el JSON, la ignoramos
+                false
             }
         }
 
-        // Mapeo a UI
         val uiResults = filtered.map { event ->
             EventResult(
                 id = event.id,

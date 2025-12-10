@@ -35,6 +35,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.proyectoagenda.model.EventCategory
 import com.example.proyectoagenda.model.EventStatus
+import com.example.proyectoagenda.notification.NotificationOption
 import com.example.proyectoagenda.ui.create.CreateEventViewModel
 import com.example.proyectoagenda.ui.create.LocationPickerMap
 import java.time.LocalDate
@@ -59,26 +60,35 @@ fun CreateEventScreen(
     val context = LocalContext.current
     var showMap by remember { mutableStateOf(false) }
 
-    // --- LÓGICA DE PERMISOS PARA CONTACTOS ---
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
+    // --- PERMISOS: CONTACTOS + NOTIFICACIONES ---
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.READ_CONTACTS] == true) {
             viewModel.fetchDeviceContacts()
         }
+        // El de notificaciones no requiere acción inmediata, solo estar concedido
     }
 
-    // Al iniciar la pantalla, verificamos si tenemos permiso
     LaunchedEffect(Unit) {
-        when (PackageManager.PERMISSION_GRANTED) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) -> {
-                // Ya tenemos permiso, cargamos contactos
-                viewModel.fetchDeviceContacts()
+        val permissionsToRequest = mutableListOf<String>()
+
+        // 1. Contactos
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            permissionsToRequest.add(Manifest.permission.READ_CONTACTS)
+        } else {
+            viewModel.fetchDeviceContacts()
+        }
+
+        // 2. Notificaciones (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
-            else -> {
-                // No tenemos permiso, lo pedimos
-                launcher.launch(Manifest.permission.READ_CONTACTS)
-            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            permissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
 
@@ -164,6 +174,13 @@ fun CreateEventScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
+            // --- NUEVO: 3.5 Recordatorio ---
+            NotificationDropdown(
+                selectedOption = uiState.notificationOption,
+                onOptionSelected = viewModel::onNotificationOptionSelected
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
             // 4. Status
             StatusDropdown(
                 selectedStatus = uiState.status,
@@ -179,7 +196,7 @@ fun CreateEventScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 6. Contacto (AHORA DINÁMICO)
+            // 6. Contacto
             ContactDropdown(
                 selectedContact = uiState.selectedContactName,
                 availableContacts = uiState.availableContacts,
@@ -221,28 +238,29 @@ fun CreateEventScreen(
     }
 }
 
-// ... Componentes Auxiliares (CategorySelectionRow, GenericDropdown, etc) IGUALES ...
+// ... Otros componentes (CategorySelectionRow, etc.) ...
 
 @Composable
-fun CategorySelectionRow(
-    selectedCategory: EventCategory,
-    onCategorySelected: (EventCategory) -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+fun NotificationDropdown(selectedOption: NotificationOption, onOptionSelected: (NotificationOption) -> Unit) {
+    GenericDropdown(
+        label = "Recordatorio",
+        selectedValue = selectedOption.displayName,
+        options = NotificationOption.values().map { it.displayName },
+        onOptionSelected = { name ->
+            val option = NotificationOption.values().first { it.displayName == name }
+            onOptionSelected(option)
+        }
+    )
+}
+
+// --- Componentes que ya tenías (solo asegúrate de que GenericDropdown esté disponible) ---
+@Composable
+fun CategorySelectionRow(selectedCategory: EventCategory, onCategorySelected: (EventCategory) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text("Categoria:", fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
-        Row(
-            modifier = Modifier.horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             EventCategory.values().forEach { category ->
-                CategoryTabButton(
-                    text = category.displayName,
-                    isSelected = category == selectedCategory,
-                    onClick = { onCategorySelected(category) }
-                )
+                CategoryTabButton(text = category.displayName, isSelected = category == selectedCategory, onClick = { onCategorySelected(category) })
             }
         }
     }
@@ -250,50 +268,16 @@ fun CategorySelectionRow(
 
 @Composable
 fun CategoryTabButton(text: String, isSelected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(20.dp))
-            .background(if (isSelected) BlueHighlight else GrayUnselected)
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Text(
-            text = text,
-            color = if (isSelected) Color.White else Color.Black,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            fontSize = 12.sp
-        )
+    Box(modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(if (isSelected) BlueHighlight else GrayUnselected).clickable { onClick() }.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(text = text, color = if (isSelected) Color.White else Color.Black, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, fontSize = 12.sp)
     }
 }
 
 @Composable
-fun CustomLabelTextField(
-    label: String,
-    value: String,
-    onValueChange: (String) -> Unit,
-    singleLine: Boolean = true,
-    minLines: Int = 1
-) {
+fun CustomLabelTextField(label: String, value: String, onValueChange: (String) -> Unit, singleLine: Boolean = true, minLines: Int = 1) {
     Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
-        Text(
-            label,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.width(80.dp).padding(top = 16.dp)
-        )
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
-                focusedBorderColor = GrayUnselected,
-                unfocusedBorderColor = GrayUnselected
-            ),
-            singleLine = singleLine,
-            minLines = minLines
-        )
+        Text(label, fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp).padding(top = 16.dp))
+        OutlinedTextField(value = value, onValueChange = onValueChange, modifier = Modifier.weight(1f), shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, focusedBorderColor = GrayUnselected, unfocusedBorderColor = GrayUnselected), singleLine = singleLine, minLines = minLines)
     }
 }
 
@@ -302,18 +286,7 @@ fun ReadOnlyTextField(label: String, value: String, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(label, fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
         Box(modifier = Modifier.weight(1f).clickable { onClick() }) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = {},
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledContainerColor = Color.White,
-                    disabledBorderColor = GrayUnselected,
-                    disabledTextColor = Color.Black
-                ),
-            )
+            OutlinedTextField(value = value, onValueChange = {}, modifier = Modifier.fillMaxWidth(), enabled = false, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(disabledContainerColor = Color.White, disabledBorderColor = GrayUnselected, disabledTextColor = Color.Black))
             Box(modifier = Modifier.matchParentSize().clickable(onClick = onClick))
         }
     }
@@ -321,59 +294,14 @@ fun ReadOnlyTextField(label: String, value: String, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GenericDropdown(
-    label: String,
-    selectedValue: String,
-    options: List<String>,
-    onOptionSelected: (String) -> Unit
-) {
+fun GenericDropdown(label: String, selectedValue: String, options: List<String>, onOptionSelected: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(label, fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
-            modifier = Modifier.weight(1f)
-        ) {
-            OutlinedTextField(
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
-                readOnly = true,
-                value = selectedValue,
-                onValueChange = {},
-                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, null) },
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedBorderColor = GrayUnselected,
-                    unfocusedBorderColor = GrayUnselected
-                ),
-                textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.background(Color.White)
-            ) {
-                // Validación para lista vacía
-                if (options.isEmpty()) {
-                    DropdownMenuItem(
-                        text = { Text("No hay contactos") },
-                        onClick = { expanded = false }
-                    )
-                } else {
-                    options.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option) },
-                            onClick = {
-                                onOptionSelected(option)
-                                expanded = false
-                            },
-                            contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
-                        )
-                    }
-                }
+        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }, modifier = Modifier.weight(1f)) {
+            OutlinedTextField(modifier = Modifier.menuAnchor().fillMaxWidth(), readOnly = true, value = selectedValue, onValueChange = {}, trailingIcon = { Icon(Icons.Filled.ArrowDropDown, null) }, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, focusedBorderColor = GrayUnselected, unfocusedBorderColor = GrayUnselected), textStyle = LocalTextStyle.current.copy(fontWeight = FontWeight.Bold, textAlign = TextAlign.Center))
+            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }, modifier = Modifier.background(Color.White)) {
+                if (options.isEmpty()) { DropdownMenuItem(text = { Text("No hay opciones") }, onClick = { expanded = false }) } else { options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onOptionSelected(option); expanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding) } }
             }
         }
     }
@@ -381,23 +309,10 @@ fun GenericDropdown(
 
 @Composable
 fun StatusDropdown(selectedStatus: EventStatus, onStatusSelected: (EventStatus) -> Unit) {
-    GenericDropdown(
-        label = "Status:",
-        selectedValue = selectedStatus.displayName,
-        options = EventStatus.values().map { it.displayName },
-        onOptionSelected = { name ->
-            val status = EventStatus.values().first { it.displayName == name }
-            onStatusSelected(status)
-        }
-    )
+    GenericDropdown(label = "Status:", selectedValue = selectedStatus.displayName, options = EventStatus.values().map { it.displayName }, onOptionSelected = { name -> val status = EventStatus.values().first { it.displayName == name }; onStatusSelected(status) })
 }
 
 @Composable
 fun ContactDropdown(selectedContact: String, availableContacts: List<String>, onContactSelected: (String) -> Unit) {
-    GenericDropdown(
-        label = "Contacto",
-        selectedValue = selectedContact,
-        options = availableContacts,
-        onOptionSelected = onContactSelected
-    )
+    GenericDropdown(label = "Contacto", selectedValue = selectedContact, options = availableContacts, onOptionSelected = onContactSelected)
 }

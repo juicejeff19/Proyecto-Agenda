@@ -4,6 +4,7 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
+import com.example.proyectoagenda.notification.NotificationOption
 
 // Modelo unificado para guardar en el JSON
 data class AgendaEvent(
@@ -16,7 +17,8 @@ data class AgendaEvent(
     val location: String,
     val contact: String,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val notificationOption: NotificationOption = NotificationOption.SIN_NOTIFICACION
 )
 
 class EventRepository(private val context: Context) {

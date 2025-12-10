@@ -121,13 +121,21 @@ fun ConsultEventScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 2. Categoría
+                // 2. Pestañas de Categoría (MODIFICADO)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Categoria:", fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // A) Botón "Todos" Manual
+                        CategoryTabConsult(
+                            text = "Todos",
+                            isSelected = uiState.selectedCategory == null, // Es nulo cuando seleccionamos "Todos"
+                            onClick = { viewModel.onCategorySelected(null) }
+                        )
+
+                        // B) El resto de categorías del Enum
                         EventCategory.values().forEach { category ->
                             CategoryTabConsult(
                                 text = category.displayName,
@@ -139,10 +147,9 @@ fun ConsultEventScreen(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 3. CAMPOS DINÁMICOS (CORREGIDO)
+                // 3. Campos dinámicos
                 when (uiState.selectedQueryType) {
                     QueryType.RANGO -> {
-                        // Usamos el nuevo componente DateSelectorField
                         DateSelectorField(
                             label = "Fecha Inicial",
                             value = uiState.getFormattedStartDate(),
@@ -286,7 +293,6 @@ fun ConsultEventScreen(
     }
 }
 
-// --- NUEVO COMPONENTE ROBUSTO PARA FECHAS ---
 @Composable
 fun DateSelectorField(
     label: String,
@@ -299,14 +305,13 @@ fun DateSelectorField(
             onValueChange = {},
             modifier = Modifier.fillMaxWidth(),
             label = { Text(label) },
-            readOnly = true, // Solo lectura visual
+            readOnly = true,
             trailingIcon = { Icon(Icons.Default.DateRange, contentDescription = null, tint = Color.Gray) },
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = Color.White,
                 unfocusedContainerColor = Color.White
             )
         )
-        // Esta caja invisible captura el clic al 100%
         Box(
             modifier = Modifier
                 .matchParentSize()
