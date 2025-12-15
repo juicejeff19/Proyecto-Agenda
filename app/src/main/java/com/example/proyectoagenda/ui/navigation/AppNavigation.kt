@@ -1,5 +1,6 @@
 package com.example.proyectoagenda.ui.navigation
 
+import android.annotation.SuppressLint
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.*
@@ -21,6 +22,10 @@ import com.example.proyectoagenda.ui.consult.ConsultEventViewModel
 import com.example.proyectoagenda.ui.create.CreateEventViewModel
 import com.tuempresa.proyectoagenda.ui.create.CreateEventScreen
 import kotlinx.coroutines.launch
+import com.example.proyectoagenda.ui.backup.BackupScreen
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.ComponentActivity
+
 
 // ---------------------------------------------------------------------
 // Bottom Navigation Items
@@ -40,6 +45,7 @@ val bottomItems = listOf(
 // ---------------------------------------------------------------------
 //  NAVEGACIÓN PRINCIPAL
 // ---------------------------------------------------------------------
+@SuppressLint("ContextCastToActivity")
 @OptIn(ExperimentalMaterial3Api::class)
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -209,8 +215,13 @@ fun AppNavigation() {
                     )
                 }
 
+
                 composable("exit") {
-                    ExitScreen()
+                    val activity = LocalContext.current as ComponentActivity
+
+                    ExitScreen(
+                        onExit = { activity.finishAffinity() }
+                    )
                 }
             }
         }
@@ -245,28 +256,6 @@ fun BottomNavigationBar(navController: androidx.navigation.NavController) {
 // ---------------------------------------------------------------------
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BackupScreen(onMenuClicked: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Respaldar / Recuperar") },
-                navigationIcon = {
-                    IconButton(onClick = onMenuClicked) {
-                        Icon(Icons.Default.Menu, null)
-                    }
-                }
-            )
-        },
-    ) { padding ->
-        Text(
-            "Opciones de respaldo en Dropbox / Drive",
-            modifier = Modifier.padding(padding).padding(16.dp)
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 fun AboutScreen(onMenuClicked: () -> Unit) {
     Scaffold(
         topBar = {
@@ -288,14 +277,12 @@ fun AboutScreen(onMenuClicked: () -> Unit) {
 }
 
 @Composable
-fun ExitScreen() {
-    Text(
-        "Gracias por usar la app.",
-        modifier = Modifier.padding(32.dp)
-    )
+fun ExitScreen(onExit: () -> Unit) {
+    Column(modifier = Modifier.padding(32.dp)) {
+        Text("Gracias por usar la app.")
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = onExit) {
+            Text("Cerrar aplicación")
+        }
+    }
 }
-
-// *** IMPORTANTE: ***
-// He eliminado la función 'HomeScreen' antigua que estaba aquí abajo.
-// Al no estar aquí, la app usará automáticamente el archivo HomeScreen.kt
-// que creamos en el paso anterior.

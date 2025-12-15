@@ -71,23 +71,27 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         applyFilters()
     }
 
-    // CAMBIO 2: Aceptamos nulos
     fun onCategorySelected(category: EventCategory?) {
         _uiState.update { it.copy(selectedCategory = category) }
         applyFilters()
     }
 
+    // ⭐ CORRECCIÓN PARA FILTRO POR RANGO (START DATE) ⭐
     fun onStartDateChanged(date: LocalDate) {
         _uiState.update { it.copy(startDate = date) }
+        applyFilters() // <--- AGREGADO: Aplica el filtro inmediatamente.
     }
 
+    // ⭐ CORRECCIÓN PARA FILTRO POR RANGO (END DATE) ⭐
     fun onEndDateChanged(date: LocalDate) {
         _uiState.update { it.copy(endDate = date) }
+        applyFilters() // <--- AGREGADO: Aplica el filtro inmediatamente.
     }
 
+    // El filtro por día ya estaba correcto, pero lo confirmamos:
     fun onSpecificDateChanged(date: LocalDate) {
         _uiState.update { it.copy(specificDate = date) }
-        applyFilters()
+        applyFilters() // <--- YA EXISTENTE
     }
 
     fun onYearChange(increment: Int) {
@@ -116,6 +120,7 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         applyFilters()
     }
 
+    // Dejamos onConsultClicked() para que el usuario pueda forzar la consulta.
     fun onConsultClicked() {
         applyFilters()
     }
@@ -127,7 +132,7 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    // --- LÓGICA DE FILTRADO ---
+    // --- LÓGICA DE FILTRADO (Sin cambios, pero clave para que las correcciones funcionen) ---
     private fun applyFilters() {
         val state = _uiState.value
 
@@ -137,13 +142,15 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
 
                 // 1. Filtro por Fecha
                 val dateMatch = when (state.selectedQueryType) {
+                    // FILTRO POR RANGO: Comprueba que la fecha del evento esté entre startDate y endDate (ambos inclusive)
                     QueryType.RANGO -> !eventDate.isBefore(state.startDate) && !eventDate.isAfter(state.endDate)
+                    // FILTRO POR DÍA: Comprueba que la fecha del evento sea IGUAL a specificDate
                     QueryType.DIA -> eventDate.isEqual(state.specificDate)
                     QueryType.ANIO -> eventDate.year == state.selectedYear
                     QueryType.MES -> eventDate.year == state.selectedYear && eventDate.monthValue == state.selectedMonth
                 }
 
-                // CAMBIO 3: Filtro por Categoría (Si es null, pasa todo; si no, debe coincidir)
+                // 2. Filtro por Categoría
                 val categoryMatch = if (state.selectedCategory == null) {
                     true
                 } else {
@@ -172,7 +179,7 @@ class ConsultEventViewModel(application: Application) : AndroidViewModel(applica
                 latitude = event.latitude,
                 longitude = event.longitude
             )
-        }
+        }.sortedBy { it.date } // Opcional: ordenar por fecha para mejor visualización
 
         _uiState.update { it.copy(results = uiResults) }
     }

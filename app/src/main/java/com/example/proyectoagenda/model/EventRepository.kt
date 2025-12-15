@@ -4,36 +4,23 @@ import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.io.File
-import com.example.proyectoagenda.notification.NotificationOption
-
-// Modelo unificado para guardar en el JSON
-data class AgendaEvent(
-    val id: Long = System.currentTimeMillis(), // ID único basado en tiempo
-    val category: EventCategory,
-    val status: EventStatus,
-    val date: String, // Formato "yyyy-MM-dd"
-    val time: String, // Formato "HH:mm"
-    val description: String,
-    val location: String,
-    val contact: String,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    val notificationOption: NotificationOption = NotificationOption.SIN_NOTIFICACION
-)
 
 class EventRepository(private val context: Context) {
 
     private val gson = Gson()
     private val fileName = "agenda.json"
 
-    // Guardar un evento
-    fun saveEvent(event: AgendaEvent) {
+    fun insertEvent(event: AgendaEvent) {
         val events = getAllEvents().toMutableList()
         events.add(event)
         saveList(events)
     }
 
-    // Obtener todos los eventos
+    fun clearAllEvents() {
+        val file = File(context.filesDir, fileName)
+        file.writeText("[]") // lista vacía
+    }
+
     fun getAllEvents(): List<AgendaEvent> {
         val file = File(context.filesDir, fileName)
         if (!file.exists()) return emptyList()
@@ -43,7 +30,6 @@ class EventRepository(private val context: Context) {
         return gson.fromJson(jsonString, type) ?: emptyList()
     }
 
-    // Escribir la lista en el archivo
     private fun saveList(events: List<AgendaEvent>) {
         val jsonString = gson.toJson(events)
         val file = File(context.filesDir, fileName)
@@ -51,29 +37,20 @@ class EventRepository(private val context: Context) {
     }
 
     fun deleteEvent(eventId: Long) {
-        val currentList = getAllEvents().toMutableList()
-        // Borra el que coincida con el ID
-        val wasRemoved = currentList.removeIf { it.id == eventId }
-
-        if (wasRemoved) {
-            saveList(currentList)
-        }
+        val events = getAllEvents().toMutableList()
+        events.removeIf { it.id == eventId }
+        saveList(events)
     }
 
-    // 1. Obtener un solo evento por ID
-    fun getEventById(id: Long): AgendaEvent? {
-        return getAllEvents().find { it.id == id }
-    }
+    fun getEventById(id: Long): AgendaEvent? =
+        getAllEvents().find { it.id == id }
 
-    // 2. Actualizar un evento existente
-    fun updateEvent(updatedEvent: AgendaEvent) {
+    fun updateEvent(updated: AgendaEvent) {
         val list = getAllEvents().toMutableList()
-        // Buscamos el índice del evento que tenga el mismo ID
-        val index = list.indexOfFirst { it.id == updatedEvent.id }
-
+        val index = list.indexOfFirst { it.id == updated.id }
         if (index != -1) {
-            list[index] = updatedEvent // Reemplazamos
-            saveList(list) // Guardamos
+            list[index] = updated
+            saveList(list)
         }
     }
 }

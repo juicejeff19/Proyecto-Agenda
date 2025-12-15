@@ -158,7 +158,7 @@ class CreateEventViewModel(application: Application) : AndroidViewModel(applicat
                 scheduleNotification(eventToSave)
                 Toast.makeText(getApplication(), "Evento Actualizado", Toast.LENGTH_SHORT).show()
             } else {
-                repository.saveEvent(eventToSave)
+                repository.insertEvent(eventToSave)
                 // Programamos la notificación al crear
                 scheduleNotification(eventToSave)
                 Toast.makeText(getApplication(), "Evento Creado", Toast.LENGTH_SHORT).show()
