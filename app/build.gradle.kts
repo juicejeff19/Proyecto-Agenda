@@ -66,6 +66,10 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+    // Dropbox SDK: Core API para acceder a la API de archivos
+    implementation("com.dropbox.core:dropbox-core-sdk:5.0.0")
+// Necesitas kotlinx-coroutines para manejar la autenticación y la API en segundo plano
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
     // --- Compose Dependencies (Keep this set only once) ---
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
